@@ -411,4 +411,16 @@ public interface UndertowLogger extends BasicLogger {
 
     @Message(id = 5089, value = "Method parameter '%s' cannot be null")
     IllegalArgumentException nullParameter(String name);
+
+    @LogMessage(level = ERROR)
+    @Message(id = 5090, value = "Unexpected failure")
+    void handleUnexpectedFailure(@Cause Throwable t);
+
+    @LogMessage(level = ERROR)
+    @Message(id = 5091, value = "Failed to initialize DirectByteBufferDeallocator")
+    void directBufferDeallocatorInitializationFailed(@Cause Throwable t);
+
+    @LogMessage(level = DEBUG)
+    @Message(id = 5092, value = "Failed to free direct buffer")
+    void directBufferDeallocationFailed(@Cause Throwable t);
 }
