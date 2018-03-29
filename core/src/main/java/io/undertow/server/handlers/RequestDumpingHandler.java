@@ -158,7 +158,6 @@ public class RequestDumpingHandler implements HttpHandler {
     }
 
 
-
     public static class Builder implements HandlerBuilder {
 
         @Override
