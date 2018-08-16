@@ -55,8 +55,13 @@ public class AjpCharacterEncodingTestCase {
     public static void setup() throws Exception {
         undertow = Undertow.builder()
                 .setServerOption(UndertowOptions.URL_CHARSET, "MS949")
-                .addListener(PORT, DefaultServer.getHostAddress(), Undertow.ListenerType.AJP)
-                .setHandler(new HttpHandler() {
+                .setServerOption(UndertowOptions.ALLOW_UNESCAPED_CHARACTERS_IN_URL, true)
+                .addListener(
+                        new Undertow.ListenerBuilder()
+                                .setType(Undertow.ListenerType.AJP)
+                                .setHost(DefaultServer.getHostAddress())
+                                .setPort(PORT)
+                ).setHandler(new HttpHandler() {
                     @Override
                     public void handleRequest(HttpServerExchange exchange) throws Exception {
                         exchange.getResponseSender().send("RESULT:" + exchange.getQueryParameters().get("p").getFirst());
