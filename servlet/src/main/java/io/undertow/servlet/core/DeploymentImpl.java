@@ -25,8 +25,10 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executor;
 
 import io.undertow.security.api.AuthenticationMechanism;
@@ -39,6 +41,7 @@ import io.undertow.servlet.api.DeploymentManager;
 import io.undertow.servlet.api.ServletContainer;
 import io.undertow.servlet.api.ServletDispatcher;
 import io.undertow.servlet.api.ThreadSetupAction;
+import io.undertow.servlet.api.ServletInfo;
 import io.undertow.servlet.api.ThreadSetupHandler;
 import io.undertow.servlet.handlers.ServletInitialHandler;
 import io.undertow.servlet.handlers.ServletPathMatches;
@@ -74,6 +77,13 @@ public class DeploymentImpl implements Deployment {
     private volatile Charset defaultCharset = StandardCharsets.ISO_8859_1;
     private volatile List<AuthenticationMechanism> authenticationMechanisms;
     private volatile List<ThreadSetupHandler> threadSetupActions;
+
+    /**
+     * user for {@link #tryAddServletMappings(ServletInfo, String...)}
+     *
+     * https://issues.jboss.org/browse/UNDERTOW-1418
+     */
+    private Set<String> existingUrlPatterns;
 
     public DeploymentImpl(DeploymentManager deploymentManager, final DeploymentInfo deploymentInfo, ServletContainer servletContainer) {
         this.deploymentManager = deploymentManager;
@@ -244,6 +254,35 @@ public class DeploymentImpl implements Deployment {
     @Override
     public DeploymentManager.State getDeploymentState() {
         return deploymentManager.getState();
+    }
+
+    @Override
+    public Set<String> tryAddServletMappings(ServletInfo servletInfo, String... urlPatterns) {
+        final Set<String> ret = new HashSet<>();
+        if(existingUrlPatterns == null) {
+            existingUrlPatterns = new HashSet<>();
+            for (ServletInfo s : deploymentInfo.getServlets().values()) {
+                if (!s.getName().equals(servletInfo.getName())) {
+                    existingUrlPatterns.addAll(s.getMappings());
+                }
+            }
+        }
+        for (String pattern : urlPatterns) {
+            if (existingUrlPatterns.contains(pattern)) {
+                ret.add(pattern);
+            }
+        }
+        //only update if no changes have been made
+        if (ret.isEmpty()) {
+            for (String pattern : urlPatterns) {
+                existingUrlPatterns.add(pattern);
+                if (!servletInfo.getMappings().contains(pattern)) {
+                    servletInfo.addMapping(pattern);
+                }
+            }
+        }
+        getServletPaths().invalidate();
+        return ret;
     }
 
     public void setDefaultCharset(Charset defaultCharset) {
