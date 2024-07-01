@@ -1,6 +1,8 @@
 package io.undertow.server.ssl;
 
 import io.undertow.Undertow;
+import io.undertow.server.HttpHandler;
+import io.undertow.server.HttpServerExchange;
 import io.undertow.testutils.DefaultServer;
 import io.undertow.util.Headers;
 import java.io.IOException;
@@ -35,11 +37,14 @@ public class TLS13HalfCloseHangTestCase {
 
     Undertow server = Undertow.builder()
         // This relies on TLSv1.2 context actually supporting TLS 1.3 which works fine with JDK11
-        .addHttpsListener(0, "localhost", DefaultServer.getServerSslContext())
-        .setHandler((exchange) -> {
-          exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
-          exchange.getResponseSender().send("Hello World!\n");
-        })
+      .addHttpsListener(0, "localhost", DefaultServer.getServerSslContext())
+            .setHandler(new HttpHandler() {
+              @Override
+              public void handleRequest(HttpServerExchange exchange) throws Exception {
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
+                exchange.getResponseSender().send("Hello World!\n");
+              }
+            })
         .setSocketOption(Options.SSL_ENABLED_PROTOCOLS, Sequence.of("TLSv1.3"))
         // These make the issue easier to detect
         .setIoThreads(1)
