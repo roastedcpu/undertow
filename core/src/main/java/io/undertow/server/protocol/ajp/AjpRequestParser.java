@@ -49,7 +49,12 @@ import static io.undertow.util.Methods.VERSION_CONTROL;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import io.undertow.UndertowLogger;
 import io.undertow.UndertowMessages;
@@ -67,7 +72,6 @@ import io.undertow.util.URLUtils;
  */
 public class AjpRequestParser {
 
-
     private final String encoding;
     private final boolean doDecode;
     private final boolean allowEncodedSlash;
@@ -75,6 +79,7 @@ public class AjpRequestParser {
     private final int maxHeaders;
     private StringBuilder decodeBuffer;
     private final boolean allowUnescapedCharactersInUrl;
+    private final Pattern allowedRequestAttributesPattern;
 
     private static final HttpString[] HTTP_HEADERS;
 
@@ -86,6 +91,7 @@ public class AjpRequestParser {
 
     private static final HttpString[] HTTP_METHODS;
     private static final String[] ATTRIBUTES;
+    private static final Set<String> ATTR_SET;
 
     public static final String QUERY_STRING = "query_string";
 
@@ -175,15 +181,25 @@ public class AjpRequestParser {
         ATTRIBUTES[11] = SSL_KEY_SIZE;
         ATTRIBUTES[12] = SECRET;
         ATTRIBUTES[13] = STORED_METHOD;
+        ATTR_SET = new HashSet<String>(Arrays.asList(ATTRIBUTES));
     }
 
     public AjpRequestParser(String encoding, boolean doDecode, int maxParameters, int maxHeaders, boolean allowEncodedSlash, boolean allowUnescapedCharactersInUrl) {
+        this(encoding, doDecode, maxParameters, maxHeaders, allowEncodedSlash, allowUnescapedCharactersInUrl, null);
+    }
+
+    public AjpRequestParser(String encoding, boolean doDecode, int maxParameters, int maxHeaders, boolean allowEncodedSlash, boolean allowUnescapedCharactersInUrl, String allowedRequestAttributesPattern) {
         this.encoding = encoding;
         this.doDecode = doDecode;
         this.maxParameters = maxParameters;
         this.maxHeaders = maxHeaders;
         this.allowEncodedSlash = allowEncodedSlash;
         this.allowUnescapedCharactersInUrl = allowUnescapedCharactersInUrl;
+        if (allowedRequestAttributesPattern != null && !allowedRequestAttributesPattern.isEmpty()) {
+            this.allowedRequestAttributesPattern = Pattern.compile(allowedRequestAttributesPattern);
+        } else {
+            this.allowedRequestAttributesPattern = null;
+        }
     }
 
 
@@ -458,12 +474,21 @@ public class AjpRequestParser {
                         state.sslCert = result;
                     } else if (state.currentAttribute.equals(SSL_KEY_SIZE)) {
                         state.sslKeySize = result;
-                    }  else {
-                        //other attributes
-                        if(state.attributes == null) {
+                    } else {
+                        // other attributes
+                        if (state.attributes == null) {
                             state.attributes = new TreeMap<>();
                         }
-                        state.attributes.put(state.currentAttribute, result);
+                        if (ATTR_SET.contains(state.currentAttribute)) {
+                            // known attirubtes
+                            state.attributes.put(state.currentAttribute, result);
+                        } else if (allowedRequestAttributesPattern != null) {
+                            // custom allowed attributes
+                            Matcher m = allowedRequestAttributesPattern.matcher(state.currentAttribute);
+                            if (m.matches()) {
+                                state.attributes.put(state.currentAttribute, result);
+                            }
+                        }
                     }
                     state.currentAttribute = null;
                 }

@@ -317,6 +317,16 @@ public class UndertowOptions {
 
     public static final Option<Boolean> ALLOW_UNESCAPED_CHARACTERS_IN_URL = Option.simple(UndertowOptions.class,"ALLOW_UNESCAPED_CHARACTERS_IN_URL", Boolean.class);
 
+    /**
+     * The AJP protocol itself supports the passing of arbitrary request attributes.
+     * The reverse proxy passes various information to the AJP connector using request attributes through AJP protocol.
+     * Unrecognised request attributes will be ignored unless the entire attribute name matches this regular expression.
+     *
+     * If not specified, the default value is null.
+     */
+    public static final Option<String> AJP_ALLOWED_REQUEST_ATTRIBUTES_PATTERN = Option.simple(UndertowOptions.class, "AJP_ALLOWED_REQUEST_ATTRIBUTES_PATTERN", String.class);
+
+
     private UndertowOptions() {
 
     }
