@@ -20,9 +20,15 @@ package io.undertow;
 
 import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
+import java.nio.file.Path;
+
+import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLHandshakeException;
 import javax.net.ssl.SSLPeerUnverifiedException;
 
+import io.undertow.server.RequestTooBigException;
+import io.undertow.server.handlers.form.MultiPartParserDefinition;
+import io.undertow.util.UrlDecodeException;
 import org.jboss.logging.Messages;
 import org.jboss.logging.annotations.Cause;
 import org.jboss.logging.annotations.Message;
@@ -34,6 +40,8 @@ import io.undertow.server.handlers.builder.HandlerBuilder;
 import io.undertow.util.HttpString;
 import io.undertow.util.ParameterLimitException;
 import io.undertow.util.BadRequestException;
+import org.xnio.channels.ReadTimeoutException;
+import org.xnio.channels.WriteTimeoutException;
 
 /**
  * @author Stuart Douglas
@@ -95,7 +103,7 @@ public interface UndertowMessages {
 //    IOException requestEntityWasTooLarge(SocketAddress address, long size);
 
     @Message(id = 20, value = "Connection terminated as request was larger than %s")
-    IOException requestEntityWasTooLarge(long size);
+    RequestTooBigException requestEntityWasTooLarge(long size);
 
     @Message(id = 21, value = "Session already invalidated")
     IllegalStateException sessionAlreadyInvalidated();
@@ -148,10 +156,10 @@ public interface UndertowMessages {
     @Message(id = 38, value = "Authentication failed, requested user name '%s'")
     String authenticationFailed(final String userName);
 
-    @Message(id = 39, value = "To many query parameters, cannot have more than %s query parameters")
+    @Message(id = 39, value = "Too many query parameters, cannot have more than %s query parameters")
     BadRequestException tooManyQueryParameters(int noParams);
 
-    @Message(id = 40, value = "To many headers, cannot have more than %s header")
+    @Message(id = 40, value = "Too many headers, cannot have more than %s header")
     String tooManyHeaders(int noParams);
 
     @Message(id = 41, value = "Channel is closed")
@@ -191,7 +199,7 @@ public interface UndertowMessages {
     IllegalArgumentException listenerAlreadyRegistered(String name);
 
     @Message(id = 54, value = "The maximum size %s for an individual file in a multipart request was exceeded")
-    IOException maxFileSizeExceeded(long maxIndividualFileSize);
+    MultiPartParserDefinition.FileTooLargeException maxFileSizeExceeded(long maxIndividualFileSize);
 
     @Message(id = 55, value = "Could not set attribute %s to %s as it is read only")
     String couldNotSetAttribute(String attributeName, String newValue);
@@ -245,7 +253,7 @@ public interface UndertowMessages {
     IllegalStateException matcherAlreadyContainsTemplate(String templateString, String templateString1);
 
     @Message(id = 72, value = "Failed to decode url %s to charset %s")
-    IllegalArgumentException failedToDecodeURL(String s, String enc, @Cause Exception e);
+    UrlDecodeException failedToDecodeURL(String s, String enc, @Cause Exception e);
 
 
     @Message(id = 73, value = "Resource change listeners are not supported")
@@ -513,8 +521,8 @@ public interface UndertowMessages {
     @Message(id = 161, value = "HTTP/2 header block is too large")
     String headerBlockTooLarge();
 
-    @Message(id = 162, value = "Same-site attribute %s is invalid. It must be Strict or Lax")
-    IllegalArgumentException invalidSameSiteMode(String mode);
+    @Message(id = 162, value = "An invalid SameSite attribute [%s] is specified. It must be one of %s")
+    IllegalArgumentException invalidSameSiteMode(String mode, String validAttributes);
 
     @Message(id = 163, value = "Invalid token %s")
     IllegalArgumentException invalidToken(byte c);
@@ -524,6 +532,9 @@ public interface UndertowMessages {
 
     @Message(id = 165, value = "Invalid character %s in request-target")
     String invalidCharacterInRequestTarget(char next);
+
+    @Message(id = 166, value = "Pooled object is closed")
+    IllegalStateException objectIsClosed();
 
     @Message(id = 167, value = "More than one host header in request")
     IOException moreThanOneHostHeader();
@@ -543,6 +554,93 @@ public interface UndertowMessages {
     @Message(id = 174, value = "An invalid escape character in cookie value")
     IllegalArgumentException invalidEscapeCharacter();
 
+    @Message(id = 175, value = "Invalid Hpack index %s")
+    HpackException invalidHpackIndex(int index);
+
+    @Message(id = 178, value = "Buffer pool is too small, min size is %s")
+    IllegalArgumentException bufferPoolTooSmall(int minSize);
+
+    @Message(id = 179, value = "Invalid PROXY protocol header")
+    IOException invalidProxyHeader();
+
+    @Message(id = 180, value = "PROXY protocol header exceeded max size of 107 bytes")
+    IOException headerSizeToLarge();
+
+    @Message(id = 181, value = "HTTP/2 trailers too large for single buffer")
+    RuntimeException http2TrailerToLargeForSingleBuffer();
+
+    @Message(id = 182, value = "Ping not supported")
+    IOException pingNotSupported();
+
+    @Message(id = 183, value = "Ping timed out")
+    IOException pingTimeout();
+
+    @Message(id = 184, value = "Stream limit exceeded")
+    IOException streamLimitExceeded();
+
+    @Message(id = 185, value = "Invalid IP address %s")
+    IOException invalidIpAddress(String addressString);
+
+    @Message(id = 186, value = "Invalid TLS extension")
+    SSLException invalidTlsExt();
+
+    @Message(id = 187, value = "Not enough data")
+    SSLException notEnoughData();
+
+    @Message(id = 188, value = "Empty host name in SNI extension")
+    SSLException emptyHostNameSni();
+
+    @Message(id = 189, value = "Duplicated host name of type %s")
+    SSLException duplicatedSniServerName(int type);
+
+    @Message(id = 190, value = "No context for SSL connection")
+    SSLException noContextForSslConnection();
+
+    @Message(id = 191, value = "Default context cannot be null")
+    IllegalStateException defaultContextCannotBeNull();
+
     @Message(id = 192, value = "Form value is a in-memory file, use getFileItem() instead")
     IllegalStateException formValueIsInMemoryFile();
+
+    @Message(id = 193, value = "Character decoding failed. Parameter [%s] with value [%s] has been ignored. Note: further occurrences of Parameter errors will be logged at DEBUG level.")
+    String failedToDecodeParameterValue(String parameter, String value, @Cause Exception e);
+
+    @Message(id = 194, value = "Character decoding failed. Parameter with name [%s] has been ignored. Note: further occurrences of Parameter errors will be logged at DEBUG level.")
+    String failedToDecodeParameterName(String parameter, @Cause Exception e);
+
+    @Message(id = 195, value = "Chunk size too large")
+    IOException chunkSizeTooLarge();
+
+    @Message(id = 196, value = "Session with id %s already exists")
+    IllegalStateException sessionWithIdAlreadyExists(String sessionID);
+
+    @Message(id = 197, value = "Blocking read timed out after %s nanoseconds.")
+    ReadTimeoutException blockingReadTimedOut(long timeoutNanoseconds);
+
+    @Message(id = 198, value = "Blocking write timed out after %s nanoseconds.")
+    WriteTimeoutException blockingWriteTimedOut(long timeoutNanoseconds);
+
+    @Message(id = 199, value = "Read timed out after %s milliseconds.")
+    ReadTimeoutException readTimedOut(long timeoutMilliseconds);
+
+    @Message(id = 200, value = "Failed to replace hash output stream ")
+    SSLException failedToReplaceHashOutputStream(@Cause Exception e);
+
+    @Message(id = 201, value = "Failed to replace hash output stream ")
+    RuntimeException failedToReplaceHashOutputStreamOnWrite(@Cause Exception e);
+
+    @Message(id = 202, value = "Failed to initialize path manager for '%s' path.")
+    RuntimeException failedToInitializePathManager(String path, @Cause IOException ioe);
+
+    @Message(id = 203, value = "Invalid ACL entry")
+    IllegalArgumentException invalidACLAddress(@Cause Exception e);
+
+    @Message(id = 205, value = "Path is not a directory '%s'")
+    IOException pathNotADirectory(Path path);
+
+    @Message(id = 206, value = "Path '%s' is not a directory")
+    IOException pathElementIsRegularFile(Path path);
+
+    @Message(id = 207, value = "Invalid SNI hostname '%s'")
+    IllegalArgumentException invalidSniHostname(String hostNameValue, @Cause Throwable t);
 }
