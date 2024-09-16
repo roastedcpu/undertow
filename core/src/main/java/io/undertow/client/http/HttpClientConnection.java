@@ -77,6 +77,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 
 import static io.undertow.client.UndertowClientMessages.MESSAGES;
 import static io.undertow.util.Headers.CLOSE;
@@ -323,6 +324,16 @@ class HttpClientConnection extends AbstractAttachable implements Closeable, Clie
     @Override
     public void addCloseListener(ChannelListener<ClientConnection> listener) {
         closeListeners.add(listener);
+    }
+
+    @Override
+    public boolean isPingSupported() {
+        return false;
+    }
+
+    @Override
+    public void sendPing(PingListener listener, long timeout, TimeUnit timeUnit) {
+        throw new UnsupportedOperationException();
     }
 
     @Override

@@ -8,15 +8,9 @@ import io.undertow.client.ClientExchange;
 import io.undertow.client.ClientRequest;
 import io.undertow.client.ClientStatistics;
 import io.undertow.connector.ByteBufferPool;
-import io.undertow.protocols.http2.AbstractHttp2StreamSourceChannel;
-import io.undertow.protocols.http2.Http2Channel;
-import io.undertow.protocols.http2.Http2GoAwayStreamSourceChannel;
-import io.undertow.protocols.http2.Http2HeadersStreamSinkChannel;
-import io.undertow.protocols.http2.Http2PingStreamSourceChannel;
-import io.undertow.protocols.http2.Http2PushPromiseStreamSourceChannel;
-import io.undertow.protocols.http2.Http2RstStreamStreamSourceChannel;
-import io.undertow.protocols.http2.Http2StreamSourceChannel;
+import io.undertow.protocols.http2.*;
 import io.undertow.server.protocol.http.HttpAttachments;
+import io.undertow.testutils.Supplier;
 import io.undertow.util.HeaderMap;
 import io.undertow.util.HeaderValues;
 import io.undertow.util.Headers;
@@ -156,7 +150,7 @@ public class DoSHttp2ClientConnection extends Http2ClientConnection implements C
             clientCallback.failed(e);
             return;
         }
-        Http2ClientExchange exchange = new Http2ClientExchange(this, sinkChannel, request);
+        final Http2ClientExchange exchange = new Http2ClientExchange(this, sinkChannel, request);
         currentExchanges.put(sinkChannel.getStreamId(), exchange);
 
         sinkChannel.setTrailersProducer(new Http2HeadersStreamSinkChannel.TrailersProducer() {
@@ -196,7 +190,12 @@ public class DoSHttp2ClientConnection extends Http2ClientConnection implements C
                 sinkChannel.shutdownWrites();
                 if (!sinkChannel.flush()) {
                     sinkChannel.getWriteSetter().set(ChannelListeners.flushingChannelListener(null,
-                            (ChannelExceptionHandler<StreamSinkChannel>) (channel, exception) -> handleError(exception)));
+                            new ChannelExceptionHandler<StreamSinkChannel>() {
+                                @Override
+                                public void handleException(StreamSinkChannel channel, IOException exception) {
+                                    handleError(exception);
+                                }
+                            }));
                     sinkChannel.resumeWrites();
                 }
             } catch (Throwable e) {
@@ -306,7 +305,7 @@ public class DoSHttp2ClientConnection extends Http2ClientConnection implements C
     }
 
     @Override
-    public void sendPing(PingListener listener, long timeout, TimeUnit timeUnit) {
+    public void sendPing(final PingListener listener, long timeout, TimeUnit timeUnit) {
         long count = PING_COUNTER.incrementAndGet();
         byte[] data = new byte[8];
         data[0] = (byte) count;
@@ -319,15 +318,34 @@ public class DoSHttp2ClientConnection extends Http2ClientConnection implements C
         data[7] = (byte)(count << 54);
         final PingKey key = new PingKey(data);
         outstandingPings.put(key, listener);
-        if(timeout > 0) {
-            http2Channel.getIoThread().executeAfter(() -> {
-                PingListener listener1 = outstandingPings.remove(key);
-                if(listener1 != null) {
-                    listener1.failed(UndertowMessages.MESSAGES.pingTimeout());
+        if (timeout > 0) {
+            http2Channel.getIoThread().executeAfter(new Runnable() {
+                @Override
+                public void run() {
+                    PingListener listener1 = outstandingPings.remove(key);
+                    if (listener1 != null) {
+                        listener1.failed(UndertowMessages.MESSAGES.pingTimeout());
+                    }
                 }
             }, timeout, timeUnit);
         }
-        http2Channel.sendPing(data, (channel, exception) -> listener.failed(exception));
+        if (timeout > 0) {
+            http2Channel.getIoThread().executeAfter(new Runnable() {
+                @Override
+                public void run() {
+                    PingListener listener1 = outstandingPings.remove(key);
+                    if (listener1 != null) {
+                        listener1.failed(UndertowMessages.MESSAGES.pingTimeout());
+                    }
+                }
+            }, timeout, timeUnit);
+        }
+        http2Channel.sendPing(data, new ChannelExceptionHandler<AbstractHttp2StreamSinkChannel>() {
+            @Override
+            public void handleException(AbstractHttp2StreamSinkChannel channel, IOException exception) {
+                listener.failed(exception);
+            }
+        });
     }
 
     private class Http2ReceiveListener implements ChannelListener<Http2Channel> {
@@ -456,10 +474,21 @@ public class DoSHttp2ClientConnection extends Http2ClientConnection implements C
             }
         }
 
-        private void handleFinalResponse(Http2Channel channel, Http2ClientExchange request, Http2StreamSourceChannel response) throws IOException {
+        private void handleFinalResponse(Http2Channel channel, Http2ClientExchange request, final Http2StreamSourceChannel response) throws IOException {
             response.setTrailersHandler(headerMap -> request.putAttachment(io.undertow.server.protocol.http.HttpAttachments.REQUEST_TRAILERS, headerMap));
-            response.addCloseTask(channel1 -> currentExchanges.remove(response.getStreamId()));
-            response.setCompletionListener(channel12 -> currentExchanges.remove(response.getStreamId()));
+            response.addCloseTask(new ChannelListener<AbstractHttp2StreamSourceChannel>() {
+                @Override
+                public void handleEvent(AbstractHttp2StreamSourceChannel channel1) {
+                    currentExchanges.remove(response.getStreamId());
+                }
+            });
+            response.setCompletionListener(new ChannelListener<Http2StreamSourceChannel>() {
+                @Override
+                public void handleEvent(Http2StreamSourceChannel channel12) {
+                    currentExchanges.remove(response.getStreamId());
+                }
+            });
+
             if (request == null && initialUpgradeRequest) {
                 Channels.drain(response, Long.MAX_VALUE);
                 initialUpgradeRequest = false;

@@ -18,7 +18,6 @@
 
 package io.undertow.client;
 
-import io.undertow.UndertowMessages;
 import org.xnio.ChannelListener;
 import org.xnio.Option;
 import io.undertow.connector.ByteBufferPool;
