@@ -21,7 +21,7 @@ package io.undertow.server.protocol.http;
 import io.undertow.util.AttachmentKey;
 import io.undertow.util.HeaderMap;
 
-import java.util.function.Supplier;
+import io.undertow.util.Supplier;
 
 /**
  * Exchange attachments that have specific meaning when using the HTTP protocol

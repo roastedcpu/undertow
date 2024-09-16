@@ -8,9 +8,17 @@ import io.undertow.client.ClientExchange;
 import io.undertow.client.ClientRequest;
 import io.undertow.client.ClientStatistics;
 import io.undertow.connector.ByteBufferPool;
-import io.undertow.protocols.http2.*;
+import io.undertow.protocols.http2.AbstractHttp2StreamSinkChannel;
+import io.undertow.protocols.http2.AbstractHttp2StreamSourceChannel;
+import io.undertow.protocols.http2.Http2Channel;
+import io.undertow.protocols.http2.Http2GoAwayStreamSourceChannel;
+import io.undertow.protocols.http2.Http2HeadersStreamSinkChannel;
+import io.undertow.protocols.http2.Http2PingStreamSourceChannel;
+import io.undertow.protocols.http2.Http2PushPromiseStreamSourceChannel;
+import io.undertow.protocols.http2.Http2RstStreamStreamSourceChannel;
+import io.undertow.protocols.http2.Http2StreamSourceChannel;
 import io.undertow.server.protocol.http.HttpAttachments;
-import io.undertow.testutils.Supplier;
+import io.undertow.util.Supplier;
 import io.undertow.util.HeaderMap;
 import io.undertow.util.HeaderValues;
 import io.undertow.util.Headers;
@@ -474,8 +482,13 @@ public class DoSHttp2ClientConnection extends Http2ClientConnection implements C
             }
         }
 
-        private void handleFinalResponse(Http2Channel channel, Http2ClientExchange request, final Http2StreamSourceChannel response) throws IOException {
-            response.setTrailersHandler(headerMap -> request.putAttachment(io.undertow.server.protocol.http.HttpAttachments.REQUEST_TRAILERS, headerMap));
+        private void handleFinalResponse(Http2Channel channel, final Http2ClientExchange request, final Http2StreamSourceChannel response) throws IOException {
+            response.setTrailersHandler(new Http2StreamSourceChannel.TrailersHandler() {
+                @Override
+                public void handleTrailers(HeaderMap headerMap) {
+                    request.putAttachment(io.undertow.server.protocol.http.HttpAttachments.REQUEST_TRAILERS, headerMap);
+                }
+            });
             response.addCloseTask(new ChannelListener<AbstractHttp2StreamSourceChannel>() {
                 @Override
                 public void handleEvent(AbstractHttp2StreamSourceChannel channel1) {
