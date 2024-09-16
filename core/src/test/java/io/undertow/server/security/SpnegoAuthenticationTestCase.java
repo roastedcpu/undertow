@@ -144,7 +144,7 @@ public class SpnegoAuthenticationTestCase extends AuthenticationTestBase {
                             HttpClientUtils.readResponse(result);
 
                         } else {
-                            fail(String.format("Unexpected status code %d", result.getStatusLine().getStatusCode()));
+                            fail(String.format("Unexpected status code %d", Integer.valueOf(result.getStatusLine().getStatusCode())));
                         }
                     }
                 }
